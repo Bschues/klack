@@ -1,6 +1,12 @@
-const express = require('express')
+const express = require('express');
 const querystring = require('querystring');
-const port = 3000
+const mongoose = require('mongoose');
+
+const dbName = 'klackmessenger';
+const DB_USER = 'admin';
+const DB_PASSWORD = 'admin1';
+const DB_URI = 'ds121312.mlab.com:21312' 
+const PORT = process.env.PORT || 3000
 const app = express()
 
 // List of all messages
@@ -10,7 +16,10 @@ let messages = []
 let users = {}
 
 app.use(express.static("./public"))
+app.use(express.urlencoded({extened: false}))
 app.use(express.json())
+
+
 
 // generic comparison function for case-insensitive alphabetic sorting on the name field
 function userSortFn(a, b) {
@@ -27,7 +36,23 @@ function userSortFn(a, b) {
     return 0;      
 }
 
+const messageSchema = new mongoose.Schema({
+    sender: String,
+    message: String,
+    timestamp: Number
+})
+
+const userData = mongoose.model("userData", messageSchema)
+
+userData.find((err, data) => {
+    if (err) return console.log(err);
+    for( i = 0; i < data.length; i++) {
+        messages.push(data[i])
+    }
+})
+
 app.get("/messages", (request, response) => {
+
     // get the current time
     const now = Date.now();
 
@@ -53,15 +78,28 @@ app.post("/messages", (request, response) => {
     const timestamp = Date.now()
     request.body.timestamp = timestamp
 
-    // append the new message to the message list
-    messages.push(request.body)
-
     // update the posting user's last access timestamp (so we know they are active)
     users[request.body.sender] = timestamp
+
+    let newMessage = new userData({
+        sender: request.body.sender,
+        message: request.body.message,
+        timestamp: request.body.timestamp
+    })
+    newMessage.save(function(err) {
+        if (err) return console.log(err)
+        console.log('message saved')
+    })
+
+
 
     // Send back the successful response.
     response.status(201)
     response.send(request.body)
 })
 
-app.listen(3000)
+app.listen(PORT, () => {
+    mongoose.connect(`mongodb://${DB_USER}:${DB_PASSWORD}@${DB_URI}/${dbName}`),
+    { useNewUrlParser: true }
+    console.log(`listening on port: ${PORT}`)
+})
